@@ -1,17 +1,17 @@
 # -*- coding: utf-8 -*-
 """
-微博情感三分类训练脚本（在二分类脚本基础上改造）
-支持两种数据形态：
-1) 数据已是三分类标签（如 0/1/2 或 neg/neu/pos）
-2) 数据是二分类（0/1）且你提供中性数据文件进行合并
+Weibo sentiment three-class training script (adapted from the binary classification script)
+Supports two data formats:
+1) Data already has three-class labels (e.g., 0/1/2 or neg/neu/pos)
+2) Data is binary (0/1) and you provide a neutral data file to merge
 
-核心能力：
-- 标签映射（自动 or 手动）
-- 可选类别权重损失（CrossEntropy + class_weight）
-- 评估指标：Accuracy / Macro-F1 / 每类P-R-F1 / 混淆矩阵
-- 保存 best model（按 macro_f1）
+Core capabilities:
+- Label mapping (automatic or manual)
+- Optional class weight loss (CrossEntropy + class_weight)
+- Evaluation metrics: Accuracy / Macro-F1 / per-class P-R-F1 / confusion matrix
+- Save best model (by macro_f1)
 
-示例A（已有三分类）:
+Example A (already three-class):
 python train/train_roberta_3cls.py ^
   --data_path data/weibo_3cls.csv ^
   --text_col review --label_col label ^
@@ -19,7 +19,7 @@ python train/train_roberta_3cls.py ^
   --model_name hfl/chinese-roberta-wwm-ext ^
   --epochs 3 --batch_size 16 --lr 2e-5 --max_len 128 --seed 42
 
-示例B（二分类 + 中性集合合并）:
+Example B (binary + neutral set merge):
 python train/train_roberta_3cls.py ^
   --data_path data/Weibo_senti_100k.csv ^
   --neutral_data_path data/weibo_neutral.csv ^
@@ -60,12 +60,12 @@ from transformers import (
 
 
 # -----------------------------
-# 参数
+# Arguments
 # -----------------------------
 def parse_args():
     p = argparse.ArgumentParser()
-    p.add_argument("--data_path", type=str, required=True, help="主数据CSV")
-    p.add_argument("--neutral_data_path", type=str, default="", help="可选：中性数据CSV（用于二分类扩三分类）")
+    p.add_argument("--data_path", type=str, required=True, help="Main data CSV")
+    p.add_argument("--neutral_data_path", type=str, default="", help="Optional: neutral data CSV (for extending binary to three-class)")
     p.add_argument("--output_dir", type=str, required=True)
     p.add_argument("--model_name", type=str, default="hfl/chinese-roberta-wwm-ext")
 
@@ -85,20 +85,20 @@ def parse_args():
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--fp16", action="store_true")
     p.add_argument("--logging_steps", type=int, default=10)
-    # 标签映射策略
+    # Label mapping strategy
     p.add_argument("--label_mode", type=str, default="auto", choices=["auto", "manual"],
-                   help="auto自动识别标签；manual使用下方手动映射")
+                   help="auto automatically identifies labels; manual uses the manual mapping below")
     p.add_argument("--manual_neg_values", type=str, default="0,neg,negative,负面")
     p.add_argument("--manual_neu_values", type=str, default="1,neu,neutral,中性")
     p.add_argument("--manual_pos_values", type=str, default="2,pos,positive,正面")
 
-    # 损失函数
-    p.add_argument("--use_class_weight", action="store_true", help="是否使用类别权重")
+    # Loss function
+    p.add_argument("--use_class_weight", action="store_true", help="Whether to use class weights")
     return p.parse_args()
 
 
 # -----------------------------
-# 标签工具
+# Label utilities
 # -----------------------------
 def _norm_label_value(x: Any) -> str:
     if pd.isna(x):
@@ -113,10 +113,10 @@ def parse_value_set(s: str) -> set:
 
 def map_labels_auto(raw_labels: List[Any]) -> Tuple[np.ndarray, Dict[str, int], Dict[int, str]]:
     """
-    自动映射逻辑：
-    - 若只有 {0,1,2} -> 直接映射同值
-    - 若只有 {0,1} -> 默认 0=neg, 1=pos（没有neu）
-    - 若是文本标签，识别 neg/neu/pos 同义词
+    Automatic mapping logic:
+    - If only {0,1,2} -> directly map to the same values
+    - If only {0,1} -> default 0=neg, 1=pos (no neu)
+    - If text labels, recognize neg/neu/pos synonyms
     """
     vals = [_norm_label_value(x) for x in raw_labels]
     uniq = sorted(set(vals))
@@ -132,7 +132,7 @@ def map_labels_auto(raw_labels: List[Any]) -> Tuple[np.ndarray, Dict[str, int], 
         label2id = {"neg": 0, "neu": 1, "pos": 2}
         return y, label2id, id2label
 
-    # case2: 文本映射
+    # case2: text mapping
     y = []
     for v in vals:
         if v in neg_alias:
@@ -142,7 +142,7 @@ def map_labels_auto(raw_labels: List[Any]) -> Tuple[np.ndarray, Dict[str, int], 
         elif v in pos_alias:
             y.append(2)
         else:
-            raise ValueError(f"auto模式无法识别标签值: {v}")
+            raise ValueError(f"auto mode cannot recognize label value: {v}")
     y = np.array(y, dtype=np.int64)
     id2label = {0: "neg", 1: "neu", 2: "pos"}
     label2id = {"neg": 0, "neu": 1, "pos": 2}
@@ -160,7 +160,7 @@ def map_labels_manual(raw_labels: List[Any], neg_set: set, neu_set: set, pos_set
         elif v in pos_set:
             y.append(2)
         else:
-            raise ValueError(f"manual模式未匹配标签值: {v}")
+            raise ValueError(f"manual mode did not match label value: {v}")
     y = np.array(y, dtype=np.int64)
     id2label = {0: "neg", 1: "neu", 2: "pos"}
     label2id = {"neg": 0, "neu": 1, "pos": 2}
@@ -168,7 +168,7 @@ def map_labels_manual(raw_labels: List[Any], neg_set: set, neu_set: set, pos_set
 
 
 # -----------------------------
-# 自定义Trainer：支持class weight
+# Custom Trainer: supports class weight
 # -----------------------------
 class WeightedCELossTrainer(Trainer):
     def __init__(self, class_weights: Optional[torch.Tensor] = None, *args, **kwargs):
@@ -188,7 +188,7 @@ class WeightedCELossTrainer(Trainer):
 
 
 # -----------------------------
-# 指标
+# Metrics
 # -----------------------------
 def build_compute_metrics(id2label: Dict[int, str]):
     def _fn(eval_pred):
@@ -220,27 +220,27 @@ def main():
     os.makedirs(args.output_dir, exist_ok=True)
     set_seed(args.seed)
 
-    # 1) 读取主数据
+    # 1) Read main data
     df = pd.read_csv(args.data_path, encoding="utf-8-sig")
-    assert args.text_col in df.columns, f"缺少文本列: {args.text_col}"
-    assert args.label_col in df.columns, f"缺少标签列: {args.label_col}"
+    assert args.text_col in df.columns, f"Missing text column: {args.text_col}"
+    assert args.label_col in df.columns, f"Missing label column: {args.label_col}"
 
     df = df[[args.text_col, args.label_col]].copy()
     df[args.text_col] = df[args.text_col].fillna("").astype(str).str.strip()
     df = df[df[args.text_col] != ""].copy()
 
-    # 2) 可选合并中性数据（给二分类扩三分类）
-    # 约定：中性数据全部标1(neu)
+    # 2) Optionally merge neutral data (extend binary to three-class)
+    # Convention: all neutral data labeled as 1 (neu)
     if args.neutral_data_path:
         neu_df = pd.read_csv(args.neutral_data_path, encoding="utf-8-sig")
-        assert args.neutral_text_col in neu_df.columns, f"中性数据缺少文本列: {args.neutral_text_col}"
+        assert args.neutral_text_col in neu_df.columns, f"Neutral data missing text column: {args.neutral_text_col}"
         neu_df = neu_df[[args.neutral_text_col]].rename(columns={args.neutral_text_col: args.text_col})
         neu_df[args.text_col] = neu_df[args.text_col].fillna("").astype(str).str.strip()
         neu_df = neu_df[neu_df[args.text_col] != ""].copy()
         neu_df[args.label_col] = 1  # neu
         df = pd.concat([df, neu_df], axis=0, ignore_index=True)
 
-    # 3) 标签映射
+    # 3) Label mapping
     raw_labels = df[args.label_col].tolist()
     if args.label_mode == "auto":
         y, label2id, id2label = map_labels_auto(raw_labels)
@@ -250,17 +250,17 @@ def main():
         pos_set = parse_value_set(args.manual_pos_values)
         y, label2id, id2label = map_labels_manual(raw_labels, neg_set, neu_set, pos_set)
 
-    # 如果是二分类数据（只有0/1且被auto映射为neg/neu），会缺pos，训练三分类不合理
+    # If binary data (only 0/1 and auto-mapped to neg/neu), pos is missing, training three-class is unreasonable
     uniq = sorted(set(y.tolist()))
     if len(uniq) < 3:
         raise ValueError(
-            f"当前数据仅包含 {uniq} 类，未达到三分类。"
-            f"请提供 neutral_data_path 或使用真正三分类数据。"
+            f"Current data contains only {uniq} classes, not reaching three classes. "
+            f"Please provide neutral_data_path or use true three-class data."
         )
 
     df["label_id"] = y
 
-    # 4) 切分（分层）
+    # 4) Split (stratified)
     train_dev, test = train_test_split(
         df, test_size=args.test_size, random_state=args.seed, stratify=df["label_id"]
     )
@@ -307,7 +307,7 @@ def main():
         label2id=label2id,
     )
 
-    # 8) 类别权重
+    # 8) Class weights
     class_weights = None
     if args.use_class_weight:
         cls = np.array([0, 1, 2], dtype=np.int64)
@@ -359,7 +359,7 @@ def main():
     dev_metrics = trainer.evaluate(ds_tok["dev"])
     test_metrics = trainer.evaluate(ds_tok["test"])
 
-    # 手动算一份混淆矩阵（完整矩阵）
+    # Manually compute a full confusion matrix
     pred = trainer.predict(ds_tok["test"])
     y_true = pred.label_ids
     y_pred = np.argmax(pred.predictions, axis=-1)
