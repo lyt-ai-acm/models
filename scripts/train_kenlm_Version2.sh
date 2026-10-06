@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -e
-# 用法: bash scripts/03_train_kenlm.sh data/lm/corpus_jieba.txt models/lm_jieba_5gram
+# bash scripts/03_train_kenlm.sh data/lm/corpus_jieba.txt models/lm_jieba_5gram
 CORPUS_TXT=$1
 OUT_PREFIX=$2
 
