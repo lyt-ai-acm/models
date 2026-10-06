@@ -13,15 +13,13 @@ def main():
 
     df = pd.read_csv(args.input_csv)
     df = df.dropna(subset=['review', 'label'])
-    
-    # 保持标签比例采样
+
     _, sample_df = train_test_split(
         df, test_size=args.sample_size, random_state=args.seed, stratify=df['label']
     )
     
     os.makedirs(os.path.dirname(args.output_csv), exist_ok=True)
     sample_df.to_csv(args.output_csv, index=False, encoding="utf-8-sig")
-    print(f"成功采样 {len(sample_df)} 条数据至 {args.output_csv}")
 
 if __name__ == "__main__":
     main()
