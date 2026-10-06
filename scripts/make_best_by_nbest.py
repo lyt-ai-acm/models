@@ -11,15 +11,12 @@ if not summary_path.exists():
 
 df = pd.read_csv(summary_path, sep="\t")
 
-# 数值列转为float
 for c in ["base_f1", "e3fb_f1", "e4best_f1", "lr", "epochs", "seed"]:
     if c in df.columns:
         df[c] = pd.to_numeric(df[c], errors="coerce")
 
-# 提升值
 df["delta_f1"] = df["e4best_f1"] - df["base_f1"]
 
-# 每个nbest选最优：先按e4best_f1降序，再按delta_f1降序，再按base_f1降序
 best = (
     df.sort_values(["nbest", "e4best_f1", "delta_f1", "base_f1"], ascending=[True, False, False, False])
       .groupby("nbest", as_index=False)
@@ -27,7 +24,6 @@ best = (
       .copy()
 )
 
-# 输出列（你可以按需增减）
 cols = [
     "nbest", "run_id", "lr", "epochs", "seed",
     "base_f1", "e3fb_f1", "e4best_f1", "delta_f1",
@@ -35,14 +31,11 @@ cols = [
 ]
 best = best[cols]
 
-# 保留显示精度
 for c in ["base_f1", "e3fb_f1", "e4best_f1", "delta_f1"]:
     best[c] = best[c].map(lambda x: f"{x:.10f}")
 
-# 写CSV
 best.to_csv(out_csv, index=False, encoding="utf-8")
 
-# 写Markdown
 md_lines = []
 md_lines.append("# Best config by nbest\n")
 md_lines.append("| nbest | run_id | lr | epochs | seed | base_f1 | e3fb_f1 | e4best_f1 | ΔF1 (e4-base) | e4best_setting |")
