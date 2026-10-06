@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# ===== 可按需修改 =====
+# ==========
 MODEL_DIR="outputs/roberta_binary_e0/best_model"
 INPUT_CSV="outputs/norm/dev_top10_jieba_labeled.csv"
 OUT_DIR="outputs/ablation_dev"
