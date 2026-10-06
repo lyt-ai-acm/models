@@ -1,13 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-一站式串行执行（Python版编排）:
-1) split
-2) jieba分词语料
-3) (提示) 训练KenLM
-4) 生成Top10
-5) 训练E0
-6) 评测E1/E2/E3
-"""
 import os
 import subprocess
 
@@ -27,11 +18,8 @@ def main():
     run("python scripts/01_split_weibo.py --input_csv data/Weibo_senti_100k.csv --out_dir data/splits")
     run("python scripts/02_tokenize_for_lm_jieba.py --input_csv data/splits/train.csv --output_txt data/lm/corpus_jieba.txt")
 
-    print("\n[NOTE] KenLM请在WSL/Linux执行:")
     print("bash scripts/03_train_kenlm.sh data/lm/corpus_jieba.txt models/lm_jieba_5gram")
-    print("完成后回Windows继续。")
 
-    # 若你已经有 models/lm_jieba_5gram.klm，可继续
     run(
         "python pipeline/run_jieba.py "
         "--input_csv data/splits/dev.csv "
@@ -55,8 +43,6 @@ def main():
         "--input_csv outputs/norm/dev_top10_jieba.csv "
         "--out_json outputs/roberta_binary_e0/e123_dev_metrics.json"
     )
-
-    print("\n[Done] 全流程执行完成")
 
 
 if __name__ == "__main__":
