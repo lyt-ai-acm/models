@@ -2,29 +2,28 @@
 set -euo pipefail
 
 # =========================
-# 0) 可改参数区
+# 0) Configurable parameters section
 # =========================
 PROJECT_DIR="/root/new_model"
 cd "$PROJECT_DIR"
 
-# 初始checkpoint（你当前最好的）
+# Initial checkpoint
 BASE_CKPT="outputs/roberta_binary_e0/best_model"
 
-# 训练/验证数据
+# Training/validation data
 TRAIN_CSV="data/splits/train.csv"
 DEV_CSV="data/splits/dev.csv"
 
-# 你的训练脚本（如参数名不同，按你脚本改）
 TRAIN_PY="train/train_roberta.py"
 
-# 评测脚本
+# Evaluation script
 INFER_PY="train/infer_with_nbest.py"
 
-# nbest评测集（存在才跑）
+# nbest evaluation set (run only if exists)
 NBEST_20K="outputs/norm/dev_top10_jieba_3g20k_strict_labeled.csv"
 NBEST_40P="outputs/norm/dev_top10_jieba_3g40p_labeled.csv"
 
-# 网格：续训轮数 + 学习率
+# Grid: resume training epochs + learning rate
 EPOCHS_LIST=("1" "2" "3")
 LR_LIST=("1e-5" "5e-6" "2e-6")
 SEED_LIST=("42" "3407")
@@ -32,19 +31,19 @@ SEED_LIST=("42" "3407")
 #W1_LIST=("0.2" "0.35" "0.5")
 #ENTROPY_LOW_LIST=("0.15" "0.25")
 
-# 评测固定参数
+# Fixed evaluation parameters
 TOPK=5
 ALPHA=2.0
 W1=0.45
 MARGIN=0.12
 LAM_LIST="0.6,0.7,0.8,0.9"
 
-# 输出目录
+# Output directory
 RUN_ROOT="outputs/resume_grid"
 mkdir -p "$RUN_ROOT"
 
 # =========================
-# 1) 工具函数
+# 1) Utility functions
 # =========================
 run_train () {
   local out_dir="$1"
@@ -55,8 +54,6 @@ run_train () {
   mkdir -p "$out_dir"
 
   echo ">>> [TRAIN] out=$out_dir lr=$lr ep=$ep seed=$seed"
-
-  # ===== 按你train_roberta.py参数改这里 =====
   PYTHONPATH=. python -u "$TRAIN_PY" \
     --train_csv "$TRAIN_CSV" \
     --dev_csv "$DEV_CSV" \
@@ -89,7 +86,7 @@ run_eval_one_nbest () {
     --mix_lambda_list "$LAM_LIST"
 }
 
-# 从json提取关键分数（Base / E3_fb / E4_best）
+# Extract key scores from json (Base / E3_fb / E4_best)
 extract_scores () {
   local json_file="$1"
   python -u - << 'PY' "$json_file"
@@ -105,7 +102,7 @@ PY
 }
 
 # =========================
-# 2) 主循环：训练 + 评测
+# 2) Main loop: training + evaluation
 # =========================
 SUMMARY_TSV="$RUN_ROOT/summary.tsv"
 echo -e "run_id\tlr\tepochs\tseed\tnbest\tbase_f1\te3fb_f1\te4best_f1\te4best_setting\tjson" > "$SUMMARY_TSV"
@@ -118,7 +115,7 @@ for ep in "${EPOCHS_LIST[@]}"; do
 
       run_train "$OUT_DIR" "$lr" "$ep" "$seed"
 
-      # 兼容best_model目录或直接output_dir
+      # Compatible with best_model directory or directly output_dir
       MODEL_DIR="$OUT_DIR/best_model"
       if [ ! -d "$MODEL_DIR" ]; then
         MODEL_DIR="$OUT_DIR"
@@ -145,7 +142,7 @@ for ep in "${EPOCHS_LIST[@]}"; do
 done
 
 # =========================
-# 3) 自动选最佳checkpoint（按E4_best_f1）
+# 3) Automatically select best checkpoint
 # =========================
 BEST_TXT="$RUN_ROOT/best_by_e4.txt"
 python -u - << 'PY' "$SUMMARY_TSV" "$BEST_TXT"
