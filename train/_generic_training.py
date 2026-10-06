@@ -400,8 +400,8 @@ def build_hf_training_args(output_dir: str, lr: float,
         seed=seed,
         gradient_accumulation_steps=grad_accum_steps,
         eval_accumulation_steps=8,
-        dataloader_num_workers=0,  # 关键：减少RAM占用
-        dataloader_pin_memory=False,  # 关键：减少主机内存压力
+        dataloader_num_workers=0, 
+        dataloader_pin_memory=False,  
         save_total_limit = 1,
         remove_unused_columns=False,
     )
