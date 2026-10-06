@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-三分类评测脚本（独立使用）
-- 输出 Accuracy / Macro-F1 / 每类P-R-F1 / 混淆矩阵
+Three-class evaluation script (standalone use)
+
+Outputs Accuracy / Macro-F1 / per-class P-R-F1 / confusion matrix
 """
 
 import argparse
