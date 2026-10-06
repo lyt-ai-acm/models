@@ -1,24 +1,24 @@
-# 仅列出“建议可调”的参数（参照表）
-# 使用方式：按需把这些值手动同步到对应脚本命令��或 default.yaml
-# 不在这里出现的参数，默认保持现状不动。
+# Only the "recommended tunable" parameters are listed (reference table)
+# Usage: manually sync these values to the corresponding script commands or default.yaml as needed.
+# Parameters not appearing here remain unchanged by default.
 
 global:
   seed: 42
-  use_local_files_only: true   # 建议：from_pretrained(..., local_files_only=True)
+  use_local_files_only: true   # Suggested: from_pretrained(..., local_files_only=True)
 
 data:
   text_col: review
   label_col: label
-  max_len: 128                 # 可试: 128 / 192
+  max_len: 128                 # Can try: 128 / 192
 
 train_binary_e0:
   script: train/train_roberta_binary.py
   model_name: models/chinese-roberta-wwm-ext
-  epochs: 2                    # 当前你可从1提升到2或3
-  batch_size: 16               # 显存不足可改8/4
-  lr: 2.0e-5                   # 可试: 1e-5 / 2e-5 / 3e-5
+  epochs: 2                    # Currently you can increase from 1 to 2 or 3
+  batch_size: 16               # If GPU memory is insufficient, change to 8/4
+  lr: 2.0e-5                   # Can try: 1e-5 / 2e-5 / 3e-5
   weight_decay: 0.01
-  warmup_ratio: 0.10           # 可试: 0.06 / 0.10
+  warmup_ratio: 0.10           # Can try: 0.06 / 0.10
   fp16: false
 
 eval_binary:
@@ -28,30 +28,30 @@ eval_binary:
 
 nbest_generation:
   script: pipeline/run_pkuseg.py
-  # 对应 NormalizeConfig（pipeline/normalize_top10.py）
-  m: 2                         # 每句最多尝试纠错位置
+  # Corresponds to NormalizeConfig (pipeline/normalize_top10.py)
+  m: 2                         # Maximum number of correction positions to try per sentence
   beam_size: 50
-  topn: 10                     # 候选数上限（可试 5 / 10）
+  topn: 10                     # Upper limit of number of candidates (can try 5 / 10)
   topk_char: 15
   alpha: 1.0                   # final_score = alpha*lm + beta*prior - lamb*edit
   beta: 0.1
   lamb: 1.0
-  delta: 0.3                   # gate阈值
-  tau: 2.0                     # softmax温度
+  delta: 0.3                   # gate threshold
+  tau: 2.0                     # softmax temperature
 
 infer_nbest_ablation:
   script: train/infer_with_nbest.py
   label_col: label
-  top_k: 5                     # 创新版建议可试: 3 / 5 / 10
-  alpha: 1.5                   # 权重重标定 w^alpha；可试 1.0 / 1.5 / 2.0
-  fallback_orig: true          # 是否启用“低置信回退原句”
+  top_k: 5                     # For the innovation version, suggested values to try: 3 / 5 / 10
+  alpha: 1.5                   # Weight recalibration w^alpha; can try 1.0 / 1.5 / 2.0
+  fallback_orig: true          # Whether to enable "low-confidence fallback to original sentence"
   w1_threshold: 0.35
   margin_threshold: 0.08
   batch_size: 64
   max_len: 128
 
 ablation_grid_recommend:
-  # 你可以按这个组合跑最小消融
+  # You can run the minimal ablation with this combination
   - {top_k: 10, alpha: 1.0, fallback_orig: false}
   - {top_k: 5,  alpha: 1.5, fallback_orig: false}
   - {top_k: 5,  alpha: 2.0, fallback_orig: false}
