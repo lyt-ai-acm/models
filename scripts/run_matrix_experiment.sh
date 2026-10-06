@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -e  # 出错即停止
+set -e  
 
 # ===== 核心路径配置 =====
 ORIG_TRAIN="data/splits/train.csv"
@@ -22,7 +22,6 @@ if [ ! -f "$SUMMARY" ]; then
     echo "Model,Size,Noise,Baseline_F1,Ours_E4_F1,Delta" > "$SUMMARY"
 fi
 
-# 1. 【优化】全局只生成一次测试集 N-Best 候选 (11,999条测试数据处理较慢，缓存复用)
 GLOBAL_TEST_NBEST="$EXP_ROOT/test_top10_global.csv"
 if [ ! -f "$GLOBAL_TEST_NBEST" ]; then
     echo ">>> [OPTIMIZE] 正在生成全局测试集 N-Best 候选..."
@@ -34,13 +33,12 @@ fi
 for size in "${SIZES[@]}"; do
     for noise in "${NOISES[@]}"; do
         echo "=========================================================="
-        echo ">>> 正在执行: Size=$size | Noise=$noise"
+        echo ">>>Size=$size | Noise=$noise"
         echo "=========================================================="
 
         DATA_DIR="$EXP_ROOT/size_${size}_noise_${noise}/data"
         mkdir -p "$DATA_DIR"
 
-        # A. 采样与注噪 (仅在不存在时执行)
         TRAIN_FINAL="$DATA_DIR/train_noisy.csv"
         if [ ! -f "$TRAIN_FINAL" ]; then
             TMP_CLEAN="$DATA_DIR/train_clean.csv"
@@ -56,7 +54,6 @@ for size in "${SIZES[@]}"; do
             fi
             mkdir -p "$RUN_DIR/baseline" "$RUN_DIR/ours"
 
-            # 根据模型类型决定是否添加 save_strategy 参数
             SAVE_ARG=""
             if [[ "$model_key" == *"roberta"* || "$model_key" == *"macbert"* || "$model_key" == *"chinesebert"* ]]; then
                 SAVE_ARG="--save_strategy no"
@@ -77,9 +74,6 @@ for size in "${SIZES[@]}"; do
                 --output_dir "$RUN_DIR/ours" \
                 --model_name "$MODEL_NAME" \
                 --epochs 3 --batch_size 32 --lr 2e-5 --fp16 --scl_weight 0.15 $SAVE_ARG
-
-            # D. 推理与汇总
-            # 【修复】使用 Python 稳健地读取 JSON 中的 f1 分数，防止 grep 失败导致脚本崩溃
             BASE_F1=$(python -c "import json; d=json.load(open('$RUN_DIR/baseline/metrics.json')); print(f\"{d.get('test', {}).get('f1') or d.get('f1') or 0.0:.6f}\")")
 
             PYTHONPATH=. python train/infer_with_nbest.py \
@@ -89,18 +83,15 @@ for size in "${SIZES[@]}"; do
                 --out_json "$RUN_DIR/ours/metrics_e4.json" \
                 --alpha 2.0 --fallback_orig
 
-            # 【修复】使用 Python 从嵌套结构的 E4 结果中准确提取 F1
             OURS_F1=$(python -c "import json; d=json.load(open('$RUN_DIR/ours/metrics_e4.json')); print(f\"{d.get('E4_Entropy_Dynamic_Gating', {}).get('f1', 0.0):.6f}\")")
 
-            # 计算提升值
             DELTA=$(python -c "print(f\"{$OURS_F1 - float($BASE_F1):.6f}\")")
 
-            # 记录到 CSV
             echo "$model_key,$size,$noise,$BASE_F1,$OURS_F1,$DELTA" >> "$SUMMARY"
             echo ">>> [RESULT] $model_key | Size:$size | Noise:$noise | Delta:$DELTA"
         done
     done
 done
 
-echo "所有 18 组实验已完成！结果汇总见: $SUMMARY"
+echo " $SUMMARY"
 EOF
