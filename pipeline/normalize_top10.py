@@ -39,7 +39,7 @@ class HomophoneNormalizer:
         self.cfg = cfg
 
     def lm_score(self, text: str) -> float:
-        # 字符级空格序列，弱化分词差异
+        # Character-level spaced sequence to reduce segmentation variance.
         seq = " ".join(list(text))
         return self.lm.score(seq, bos=True, eos=True)
 
@@ -54,7 +54,7 @@ class HomophoneNormalizer:
         toks = self.segmenter.cut(text)
         orig_text = "".join(toks)
 
-        beams = [(toks, 0.0, 0.0)]  # tokens, prior_sum, edit_sum
+        beams = [(toks, 0.0, 0.0)]  # (tokens, prior_sum, edit_sum)
         s_pos = self.suspicious_positions(toks)
 
         for p in s_pos:
@@ -62,7 +62,7 @@ class HomophoneNormalizer:
             for btoks, bprior, bedit in beams:
                 orig_tok = btoks[p]
 
-                # 原词保留
+                # Keep the original token as one beam option.
                 nb.append((btoks, bprior, bedit))
 
                 cands = get_word_candidates(orig_tok, self.word_table)
@@ -81,7 +81,7 @@ class HomophoneNormalizer:
 
         uniq: Dict[str, Candidate] = {}
 
-        # 原句保底
+        # Always keep the original sentence as a fallback candidate.
         base = Candidate(
             text=orig_text,
             lm_score=self.lm_score(orig_text),

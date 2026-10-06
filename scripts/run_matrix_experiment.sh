@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-set -e  # 出错即停止
+set -e  # Stop on error.
 
-# ===== 核心路径配置 =====
+# ===== Core path configuration =====
 ORIG_TRAIN="data/splits/train.csv"
 TEST_DATA="data/splits/test.csv"
 DEV_DATA="data/splits/dev.csv"
@@ -22,10 +22,10 @@ if [ ! -f "$SUMMARY" ]; then
     echo "Model,Size,Noise,Baseline_F1,Ours_E4_F1,Delta" > "$SUMMARY"
 fi
 
-# 1. 【优化】全局只生成一次测试集 N-Best 候选 (11,999条测试数据处理较慢，缓存复用)
+# 1. [Optimization] Generate global test N-best candidates only once (cache reuse).
 GLOBAL_TEST_NBEST="$EXP_ROOT/test_top10_global.csv"
 if [ ! -f "$GLOBAL_TEST_NBEST" ]; then
-    echo ">>> [OPTIMIZE] 正在生成全局测试集 N-Best 候选..."
+    echo ">>> [OPTIMIZE] Generating global test-set N-best candidates..."
     PYTHONPATH=. python pipeline/run_jieba.py \
         --input_csv "$TEST_DATA" --output_csv "$GLOBAL_TEST_NBEST" \
         --kenlm_path "$KENLM_PATH" --word_homo "$WORD_HOMO" --char_homo "$CHAR_HOMO"
@@ -34,13 +34,13 @@ fi
 for size in "${SIZES[@]}"; do
     for noise in "${NOISES[@]}"; do
         echo "=========================================================="
-        echo ">>> 正在执行: Size=$size | Noise=$noise"
+        echo ">>> Running: Size=$size | Noise=$noise"
         echo "=========================================================="
 
         DATA_DIR="$EXP_ROOT/size_${size}_noise_${noise}/data"
         mkdir -p "$DATA_DIR"
 
-        # A. 采样与注噪 (仅在不存在时执行)
+        # A. Sampling and noise injection (only when missing).
         TRAIN_FINAL="$DATA_DIR/train_noisy.csv"
         if [ ! -f "$TRAIN_FINAL" ]; then
             TMP_CLEAN="$DATA_DIR/train_clean.csv"
@@ -51,12 +51,12 @@ for size in "${SIZES[@]}"; do
          for model_key in "${MODELS[@]}"; do
             RUN_DIR="$EXP_ROOT/size_${size}_noise_${noise}/$model_key"
             if [ -f "$RUN_DIR/ours/metrics_e4.json" ]; then
-                echo ">>> [SKIP] $model_key 已完成"
+                echo ">>> [SKIP] $model_key already completed"
                 continue
             fi
             mkdir -p "$RUN_DIR/baseline" "$RUN_DIR/ours"
 
-            # 根据模型类型决定是否添加 save_strategy 参数
+            # Add `save_strategy` only for selected transformer backbones.
             SAVE_ARG=""
             if [[ "$model_key" == *"roberta"* || "$model_key" == *"macbert"* || "$model_key" == *"chinesebert"* ]]; then
                 SAVE_ARG="--save_strategy no"
@@ -78,8 +78,8 @@ for size in "${SIZES[@]}"; do
                 --model_name "$MODEL_NAME" \
                 --epochs 3 --batch_size 32 --lr 2e-5 --fp16 --scl_weight 0.15 $SAVE_ARG
 
-            # D. 推理与汇总
-            # 【修复】使用 Python 稳健地读取 JSON 中的 f1 分数，防止 grep 失败导致脚本崩溃
+            # D. Inference and summary
+            # [Fix] Read F1 from JSON via Python to avoid grep-related failures.
             BASE_F1=$(python -c "import json; d=json.load(open('$RUN_DIR/baseline/metrics.json')); print(f\"{d.get('test', {}).get('f1') or d.get('f1') or 0.0:.6f}\")")
 
             PYTHONPATH=. python train/infer_with_nbest.py \
@@ -89,18 +89,17 @@ for size in "${SIZES[@]}"; do
                 --out_json "$RUN_DIR/ours/metrics_e4.json" \
                 --alpha 2.0 --fallback_orig
 
-            # 【修复】使用 Python 从嵌套结构的 E4 结果中准确提取 F1
+            # [Fix] Extract F1 from the nested E4 result structure via Python.
             OURS_F1=$(python -c "import json; d=json.load(open('$RUN_DIR/ours/metrics_e4.json')); print(f\"{d.get('E4_Entropy_Dynamic_Gating', {}).get('f1', 0.0):.6f}\")")
 
-            # 计算提升值
+            # Compute improvement.
             DELTA=$(python -c "print(f\"{$OURS_F1 - float($BASE_F1):.6f}\")")
 
-            # 记录到 CSV
+            # Append to summary CSV.
             echo "$model_key,$size,$noise,$BASE_F1,$OURS_F1,$DELTA" >> "$SUMMARY"
             echo ">>> [RESULT] $model_key | Size:$size | Noise:$noise | Delta:$DELTA"
         done
     done
 done
 
-echo "所有 18 组实验已完成！结果汇总见: $SUMMARY"
-EOF
+echo "All matrix experiment runs are complete. Summary: $SUMMARY"
