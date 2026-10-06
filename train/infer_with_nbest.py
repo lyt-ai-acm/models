@@ -17,7 +17,7 @@ def parse_args():
     p.add_argument("--model_dir", type=str, required=True)
     p.add_argument("--input_csv", type=str, required=True)
     p.add_argument("--out_json", type=str, required=True)
-    p.add_argument("--truth_csv", type=str, default="", help="真实带有label和文本的CSV文件")
+    p.add_argument("--truth_csv", type=str, default="", help="CSV file with ground-truth labels and texts")
 
     p.add_argument("--label_col", type=str, default="label")
     p.add_argument("--orig_col", type=str, default="orig")
@@ -26,17 +26,17 @@ def parse_args():
     p.add_argument("--max_len", type=int, default=128)
     p.add_argument("--batch_size", type=int, default=64)
 
-    p.add_argument("--top_k", type=int, default=10, help="使用前K个候选")
-    p.add_argument("--alpha", type=float, default=1.0, help="权重温度幂次: w^alpha 后再归一化")
-    p.add_argument("--fallback_orig", action="store_true", help="启用门控回退到原句预测")
+    p.add_argument("--top_k", type=int, default=10, help="Use top K candidates")
+    p.add_argument("--alpha", type=float, default=1.0, help="Weight temperature power: normalize after w^alpha")
+    p.add_argument("--fallback_orig", action="store_true", help="Enable gated fallback to original sentence prediction")
 
-    # 保留旧超参接口防止外层Shell报错，但在内部被软门控取代或结合使用
+    # Keep legacy hyperparameter interface to avoid outer shell errors, but internally replaced or combined with soft gating
     p.add_argument("--w1_threshold", type=float, default=0.35)
     p.add_argument("--margin_threshold", type=float, default=0.08)
 
-    # 创新点专属超参: 熵的边界阈值
-    p.add_argument("--entropy_low", type=float, default=0.20, help="熵低于此值完全相信纠错")
-    p.add_argument("--entropy_high", type=float, default=0.70, help="熵高于此值完全回退原句")
+    # Innovation-specific hyperparameters: entropy boundary thresholds
+    p.add_argument("--entropy_low", type=float, default=0.20, help="Entropy below this value: fully trust correction")
+    p.add_argument("--entropy_high", type=float, default=0.70, help="Entropy above this value: fully fallback to original sentence")
     return p.parse_args()
 
 
@@ -66,7 +66,7 @@ def compute_shannon_entropy(W):
 
 
 # ==========================================
-# 混合模型加载逻辑
+# Hybrid model loading logic
 # ==========================================
 def detect_model_backend(model_dir):
     if os.path.exists(os.path.join(model_dir, "model_meta.json")):
@@ -86,7 +86,7 @@ def _load_generic_training_module():
 def _load_char_vocab(char_vocab_cls, vocab_path):
     with open(vocab_path, "r", encoding="utf-8") as f:
         data = json.load(f)
-    # 直接越过 load 实例化
+    # Instantiate directly bypassing load
     vocab = char_vocab_cls()
     vocab.stoi = data
     return vocab
@@ -122,7 +122,7 @@ def _load_classical_model(model_dir, device):
 
 
 # ==========================================
-# 两种预测封装
+# Two prediction wrappers
 # ==========================================
 def predict_prob_hf(texts, tokenizer, model, device, batch_size=64, max_len=128):
     probs = []
@@ -152,9 +152,9 @@ def predict_prob_classical(texts, vocab, model, device, batch_size=64, max_len=1
             ids = [vocab.encode(t, max_len) for t in batch]
             x = torch.tensor(ids, dtype=torch.long, device=device)
 
-            # 这里统一处理返回的 logits 格式
+            # Uniformly handle the returned logits format here
             outputs = model(x)
-            # TextCNN/BiLSTM 原版代码里：return (logits, feat) if return_features else logits
+            # In original TextCNN/BiLSTM code: return (logits, feat) if return_features else logits
             if isinstance(outputs, tuple):
                 logits = outputs[0]
             else:
@@ -196,7 +196,7 @@ def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     # ===============================
-    # 智能装载模型并提供统一切口
+    # Intelligently load model and provide a unified interface
     # ===============================
     backend = detect_model_backend(args.model_dir)
     if backend == "hf":
@@ -207,7 +207,7 @@ def main():
         model, vocab = _load_classical_model(args.model_dir, device)
         predictor = lambda texts: predict_prob_classical(texts, vocab, model, device, args.batch_size, args.max_len)
 
-    # ==== 预测原句（用于Base/回退）====
+    # ==== Predict original sentence (for Base/fallback) ====
     if args.orig_col in df.columns:
         orig_texts = df[args.orig_col].astype(str).tolist()
     elif "review" in df.columns:
@@ -219,7 +219,7 @@ def main():
     if orig_texts is not None:
         p_orig = predictor(orig_texts)
 
-    # ==== 预测cand_1..cand_K ====
+    # ==== Predict cand_1..cand_K ====
     P = []
     for c in cand_cols:
         texts = df[c].fillna("").astype(str).tolist()
@@ -227,7 +227,7 @@ def main():
         P.append(p)
     P = np.stack(P, axis=1)  # [N, K]
 
-    # ==== 权重处理 ====
+    # ==== Weight processing ====
     W = df[w_cols].fillna(0.0).astype(float).to_numpy()  # [N, K]
     Wn = normalize_weights(W, alpha=args.alpha)
 
@@ -249,7 +249,7 @@ def main():
     result["E2_topk_avg"] = compute_metrics(y_true, y_e2)
     result["E3_topk_weighted"] = compute_metrics(y_true, y_e3)
 
-    # ==== 【核心创新】E4: 熵驱动的柔性自适应门控 ====
+    # ==== [Core Innovation] E4: Entropy-driven flexible adaptive gating ====
     if args.fallback_orig:
         if p_orig is None:
             raise ValueError("fallback_orig=True but no orig/review column found in input csv.")
