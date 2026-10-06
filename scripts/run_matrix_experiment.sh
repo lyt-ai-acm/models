@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 set -e  
 
-# ===== 核心路径配置 =====
 ORIG_TRAIN="data/splits/train.csv"
 TEST_DATA="data/splits/test.csv"
 DEV_DATA="data/splits/dev.csv"
