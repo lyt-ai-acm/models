@@ -196,9 +196,50 @@ See `config/tunable_params_Version3.yaml` for:
 - Resume/skip behavior is implemented by checking existing metric files (for example `metrics_e4.json`).
 - Results depend on local data/model paths and your environment setup.
 
+## Dataset Information
+
+The original test dataset used in this repository is a Chinese text dataset, not an English text dataset. In the default setting, the text data are Chinese user-generated reviews or posts, for example Chinese Weibo sentiment data. All preprocessing, homophone noise injection, candidate generation, normalization, and evaluation are designed for Chinese text.
+
+The default label space is a three-class sentiment classification:
+
+- 0 = negative
+- 1 = neutral
+- 2 = positive
+
+The text column `review` means "user review", "comment", or "post content". It does not mean "censorship" or "examination" (shencha in pinyin). The label column `label` means the sentiment class. If the original data are binary (0/1), a separate neutral dataset can be merged and assigned label 1 (neutral) to form the three-class setting.
+
+For N-best files, `orig` is the original Chinese sentence, which may contain homophone noise (tongyinzi in pinyin). `cand_1 ... cand_k` are Chinese correction candidates. `w_1 ... w_k` are their weights or confidences. `score_1 ... score_k` are normalization or language-model scores. These fields are not English text fields. They should be interpreted as Chinese text and Chinese-oriented correction scores.
+
+`neg`, `neu`, and `pos` are abbreviations for negative, neutral, and positive. `Hanzi` in pinyin means Chinese characters. `Zhongwen` in pinyin means Chinese language or Chinese text.
+
 ## Citation
 
-If this repository is used in research, please add the appropriate paper and/or dataset citation here.
+#### Dataset Citation
+
+##### 1. weibo_senti_100k (Primary Dataset)
+
+The primary dataset used in this repository is **weibo_senti_100k**, a publicly available Chinese sentiment analysis dataset derived from Sina Weibo. It contains over 100,000 manually annotated Weibo posts, with approximately 59,993 positive and 59,995 negative samples. The dataset covers diverse social media content, including daily user expressions, trending topic discussions, and short texts containing emoticons and internet slang.
+
+In this repository, the dataset is used as a Chinese text classification corpus. The text column `review` means “user review”, “comment”, or “post content”; it does not mean “censorship” or “examination” (`shencha` in pinyin). The label column `label` contains the sentiment class. For the three-class setting, a separate neutral dataset can be merged and assigned label `1` (neutral).
+
+**Source / Download Link:**
+
+- GitHub: https://github.com/SophonPlus/ChineseNlpCorpus
+- Dataset path in repository: `datasets/weibo_senti_100k`
+
+**Suggested Citation Format:**
+
+```bibtex
+@misc{weibo_senti_100k,
+  title        = {weibo\_senti\_100k: Chinese Sentiment Analysis Dataset},
+  howpublished = {\url{https://github.com/SophonPlus/ChineseNlpCorpus}},
+  note         = {Chinese sentiment analysis dataset from Sina Weibo}
+}
+```
+
+##### 2. Neutral Dataset (Auxiliary Dataset)
+
+If a separate neutral dataset is used to extend the binary setting to three classes, its source, license, and citation should follow the original dataset provider. The neutral data are assigned label `1` (neutral) in this repository.
 
 ## License
 
