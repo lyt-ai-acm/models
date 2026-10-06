@@ -39,7 +39,6 @@ class HomophoneNormalizer:
         self.cfg = cfg
 
     def lm_score(self, text: str) -> float:
-        # 字符级空格序列，弱化分词差异
         seq = " ".join(list(text))
         return self.lm.score(seq, bos=True, eos=True)
 
@@ -62,7 +61,6 @@ class HomophoneNormalizer:
             for btoks, bprior, bedit in beams:
                 orig_tok = btoks[p]
 
-                # 原词保留
                 nb.append((btoks, bprior, bedit))
 
                 cands = get_word_candidates(orig_tok, self.word_table)
@@ -81,7 +79,6 @@ class HomophoneNormalizer:
 
         uniq: Dict[str, Candidate] = {}
 
-        # 原句保底
         base = Candidate(
             text=orig_text,
             lm_score=self.lm_score(orig_text),
