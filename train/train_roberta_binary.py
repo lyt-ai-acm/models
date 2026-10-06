@@ -62,10 +62,8 @@ class ContrastiveCELossTrainer(Trainer):
     def compute_loss(self, model, inputs, return_outputs=False, **kwargs):
         labels = inputs.get("labels")
 
-        # 核心改动：判断当前模型是否处于训练状态
         is_training = model.training
 
-        # 核心改动：只有在训练时，才开启 output_hidden_states=True，验证/测试时直接为 False
         outputs = model(**inputs, output_hidden_states=is_training)
         logits = outputs.logits
 
@@ -73,17 +71,14 @@ class ContrastiveCELossTrainer(Trainer):
         loss_ce = loss_fct(logits.view(-1, self.model.config.num_labels), labels.view(-1))
 
         if is_training:
-            # 只有训练时才提取最后一层 [CLS] 向量并计算 SCL 损失
             last_hidden_state = outputs.hidden_states[-1]
             cls_embeds = last_hidden_state[:, 0, :]
             loss_scl = supervised_contrastive_loss(cls_embeds, labels, temperature=self.scl_temperature)
             total_loss = loss_ce + self.scl_weight * loss_scl
         else:
-            # 验证/测试时，仅返回标准的交叉熵损失，大幅节省内存
             total_loss = loss_ce
 
         if return_outputs:
-            # 保险起见，彻底清空可能存在的隐层引用
             outputs.hidden_states = None
             return (total_loss, outputs)
 
@@ -108,9 +103,8 @@ def parse_args():
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--fp16", action="store_true")
 
-    # 新增创新参数
-    p.add_argument("--scl_weight", type=float, default=0.1, help="SupCon对比损失的权重系数")
-    p.add_argument("--scl_temperature", type=float, default=0.07, help="对比学习温度参数")
+    p.add_argument("--scl_weight", type=float, default=0.1)
+    p.add_argument("--scl_temperature", type=float, default=0.07 )
     return p.parse_args()
 
 
@@ -194,7 +188,6 @@ def main():
         seed=args.seed,
     )
 
-    # 替换为带对比学习的 Trainer
     trainer = ContrastiveCELossTrainer(
         scl_weight=args.scl_weight,
         scl_temperature=args.scl_temperature,
