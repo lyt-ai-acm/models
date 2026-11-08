@@ -32,7 +32,13 @@ resources/
   chinese_homophone_word.txt
 ```
 
-Generated N-best CSV files normally contain `id`, `orig`, `cand_1 ... cand_k`, `w_1 ... w_k`, and `score_1 ... score_k`.
+The generated N-best CSV contains:
+- `id`: sample identifier
+- `orig`: original/noisy input text
+- `cand_1 ... cand_k`: correction candidates
+- `w_1 ... w_k`: candidate weights
+- `score_1 ... score_k`: candidate scores
+
 
 ## Code Information
 
@@ -68,9 +74,13 @@ conda activate <your-environment-name>
 
 ### 3. Verify dependencies
 
-```bash
-python in.py
-```
+Run:
+python -c "import torch, transformers, datasets, accelerate, sentencepiece, evaluate, pandas, numpy, scipy, sklearn, jieba, pkuseg, pypinyin, kenlm, yaml; print('Dependencies OK')"
+
+Expected output:
+Dependencies OK
+
+If this command fails, check that the conda environment from `model.yml` is activated.
 
 ### 4. Prepare data and models
 
