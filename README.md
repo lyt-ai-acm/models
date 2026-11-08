@@ -1,21 +1,23 @@
-# Homophone-Robust Chinese Text Classification Models
+# Entropy-driven dynamic gating with N-best candidate fusion for robust sentiment analysis of noisy user-generated content
 
-This repository contains a Chinese text-classification workflow that studies robustness to homophone noise.  
-It includes:
-- homophone-based character noise injection,
-- N-best candidate generation + KenLM reranking,
-- baseline and supervised-contrastive training,
-- inference/evaluation scripts and experiment runners.
+**Title:** Entropy-driven dynamic gating with N-best candidate fusion for robust sentiment analysis of noisy user-generated content
 
-## Repository Scope and Data Availability
+## Description
 
-- The repository contains code, configs, and small dictionary resources.
-- **Large datasets and trained model artifacts are not included.**
-- Several paths in scripts are project-specific (for example `data/splits/*.csv`, `models/lm_jieba_3gram_20k.klm`).
+This repository provides the code and configuration for robust Chinese sentiment classification when user-generated text contains homophone noise. The workflow injects Chinese homophone noise, generates multiple correction candidates, reranks candidates with a KenLM language model, and combines N-best predictions with entropy-driven dynamic gating. It also includes baseline and supervised-contrastive training scripts, evaluation utilities, and experiment runners.
 
-## Expected Data Layout
+Large datasets, trained checkpoints, and KenLM binary models are not included. Paths to these artifacts must be supplied locally.
 
-Many scripts assume this layout:
+## Dataset Information
+
+The primary data setting is Chinese user-generated sentiment text, such as Sina Weibo posts from the `weibo_senti_100k` dataset. The repository expects CSV files with the following default columns:
+
+- `review`: Chinese text, review, comment, or post content.
+- `label`: sentiment label. The default three-class convention is `0 = negative`, `1 = neutral`, and `2 = positive`.
+
+A binary dataset may be used directly, or an auxiliary neutral dataset may be merged and assigned label `1` for three-class experiments. Do not commit private, restricted, or large raw datasets to this repository.
+
+Expected layout:
 
 ```text
 data/
@@ -30,76 +32,51 @@ resources/
   chinese_homophone_word.txt
 ```
 
-### Expected CSV columns
+Generated N-best CSV files normally contain `id`, `orig`, `cand_1 ... cand_k`, `w_1 ... w_k`, and `score_1 ... score_k`.
 
-- Text column: `review` (default in most scripts)
-- Label column: `label` (default in training/evaluation scripts)
+## Code Information
 
-For generated N-best files (from `pipeline/run_jieba.py` or `pipeline/run_pkuseg.py`), columns typically include:
-- `id`, `orig`
-- `cand_1 ... cand_k`
-- `w_1 ... w_k`
-- `score_1 ... score_k`
+- `scripts/inject_noise.py`: inject character-level homophone noise into a CSV file.
+- `pipeline/run_jieba.py` and `pipeline/run_pkuseg.py`: generate N-best correction candidates.
+- `pipeline/normalize_top10.py`: candidate generation, scoring, beam search, and top-N normalization.
+- `train/train_baseline.py`: baseline classifier training.
+- `train/train_contrastive.py`: supervised-contrastive classifier training.
+- `train/infer_with_nbest.py`: N-best inference, weighted aggregation, and entropy-based fallback.
+- `scripts/run_matrix_experiment.sh`, `scripts/run_fewshot_experiment.sh`, and related scripts: reproducible experiment runners.
+- `config/tunable_params_Version3.yaml`: tunable training, normalization, inference, and ablation parameters.
+- `model.yml`: Conda environment specification.
 
-## Code Organization
+## Usage Instructions
 
-- `scripts/inject_noise.py`: injects homophone noise into text data.
-- `pipeline/normalize_top10.py`: homophone normalization with candidate generation, KenLM scoring, beam search, and top-N output.
-- `pipeline/run_jieba.py`, `pipeline/run_pkuseg.py`: build N-best candidate CSV files.
-- `train/train_baseline.py`: baseline training entry point.
-- `train/train_contrastive.py`: supervised-contrastive training entry point.
-- `train/infer_with_nbest.py`: N-best inference and evaluation (including entropy/dynamic gating options).
-- `scripts/run_matrix_experiment.sh`, `scripts/run_fewshot_experiment.sh`: matrix/few-shot style experiment runners with caching/resume logic.
-- `config/tunable_params_Version3.yaml`: suggested tunable parameters and ablation combinations.
-
-## Environment Requirements
-
-Based on `model.yml` and `in.py` imports, the project expects:
-
-- Python 3.10
-- PyTorch + Transformers stack (`torch`, `transformers`, `datasets`, `accelerate`, `sentencepiece`)
-- Data/science libs (`pandas`, `numpy`, `scikit-learn`, `scipy`)
-- NLP libs (`pypinyin`, `jieba`, `pkuseg`, `kenlm`)
-- Utility libs (`PyYAML`, `tqdm`, `regex`, `fsspec`)
-- Shell environment for experiment scripts
-- GPU is recommended for transformer training/inference
-
-> Note: there is no `requirements.txt` in this repository. Use `model.yml` as the primary environment specification.
-
-## Setup and Execution
-
-### 1) Clone
+### 1. Clone the repository
 
 ```bash
 git clone https://github.com/lyt-ai-acm/models.git
 cd models
 ```
 
-### 2) Create environment from `model.yml`
+### 2. Create the environment
+
+The supplied environment file targets Python 3.10. Create it with:
 
 ```bash
 conda env create -f model.yml
-conda activate <your-env-name>
+conda activate <your-environment-name>
 ```
 
-`model.yml` includes a Windows-style `prefix` and mirror channels; adjust/remove them for your local setup as needed.
+`model.yml` contains a machine-specific `prefix` and mirror channels. Adjust or remove those entries when using another operating system or package mirror.
 
-### 3) Verify dependencies
+### 3. Verify dependencies
 
 ```bash
 python in.py
 ```
 
-### 4) Prepare data/resources/models
+### 4. Prepare data and models
 
-- Put split CSVs under `data/splits/`.
-- Ensure `review` and `label` columns exist (or pass custom `--text_col` / `--label_col` where supported).
-- Place homophone dictionaries in `resources/`.
-- Place the KenLM model at the path used by your commands (for example `models/lm_jieba_3gram_20k.klm`).
+Place train/dev/test CSV files under `data/splits/`, ensure that their text and label columns match the command-line options, copy the homophone dictionaries into `resources/`, and provide a compatible KenLM model such as `models/lm_jieba_3gram_20k.klm`.
 
-## Representative Commands
-
-### Inject homophone noise
+### 5. Inject homophone noise
 
 ```bash
 PYTHONPATH=. python scripts/inject_noise.py \
@@ -111,20 +88,21 @@ PYTHONPATH=. python scripts/inject_noise.py \
   --seed 42
 ```
 
-`noise_ratio` is the per-character probability of replacing a character with a randomly selected homophone candidate.
-
-### Generate N-best candidates (jieba)
+### 6. Generate N-best candidates
 
 ```bash
-PYTHONPATH=. python pipeline/run_jieba.py \
+PYTHONPATH=. python pipeline/run_pkuseg.py \
   --input_csv data/splits/test.csv \
   --output_csv outputs/test_top10.csv \
+  --text_col review \
   --kenlm_path models/lm_jieba_3gram_20k.klm \
   --word_homo resources/chinese_homophone_word.txt \
   --char_homo resources/chinese_homophone_char.txt
 ```
 
-### Train baseline model
+The Jieba and PKUSeg entry points share the same normalization interface; select the script appropriate for the segmentation pipeline in your experiment.
+
+### 7. Train a baseline model
 
 ```bash
 PYTHONPATH=. python train/train_baseline.py \
@@ -134,10 +112,13 @@ PYTHONPATH=. python train/train_baseline.py \
   --test_csv data/splits/test.csv \
   --output_dir outputs/baseline \
   --model_name hfl/chinese-roberta-wwm-ext \
-  --epochs 3 --batch_size 32 --lr 2e-5 --fp16
+  --epochs 3 \
+  --batch_size 32 \
+  --lr 2e-5 \
+  --fp16
 ```
 
-### Train supervised-contrastive model
+### 8. Train the supervised-contrastive model
 
 ```bash
 PYTHONPATH=. python train/train_contrastive.py \
@@ -145,117 +126,87 @@ PYTHONPATH=. python train/train_contrastive.py \
   --train_csv data/splits/train.csv \
   --dev_csv data/splits/dev.csv \
   --test_csv data/splits/test.csv \
-  --output_dir outputs/ours \
+  --output_dir outputs/contrastive \
   --model_name hfl/chinese-roberta-wwm-ext \
-  --epochs 3 --batch_size 32 --lr 2e-5 --fp16 --scl_weight 0.15
+  --epochs 3 \
+  --batch_size 32 \
+  --lr 2e-5 \
+  --fp16 \
+  --scl_weight 0.15
 ```
 
-### N-best inference/evaluation
+### 9. Run N-best inference and evaluation
 
 ```bash
 PYTHONPATH=. python train/infer_with_nbest.py \
-  --model_dir outputs/ours/best_model \
+  --model_dir outputs/contrastive \
   --input_csv outputs/test_top10.csv \
   --truth_csv data/splits/test.csv \
-  --out_json outputs/ours/metrics_e4.json \
-  --alpha 2.0 --fallback_orig
+  --out_json outputs/contrastive/metrics.json \
+  --top_k 10 \
+  --alpha 2.0 \
+  --fallback_orig
 ```
 
-### Run experiment scripts
+Use `--entropy_low` and `--entropy_high` to change the boundaries for entropy-driven gating. The inference script writes metrics and prediction summaries to the JSON path specified by `--out_json`.
+
+### 10. Run experiment suites
 
 ```bash
 bash scripts/run_matrix_experiment.sh
 bash scripts/run_fewshot_experiment.sh
 ```
 
-## Implemented Methodology
+Review each shell script before execution and update local data, model, and KenLM paths where necessary.
 
-The implemented workflow in this repository is:
+## Requirements
 
-1. Inject homophone-based character noise into training text.
-2. Generate word-level and character-level candidate corrections.
-3. Score candidates with character-level KenLM probability.
-4. Use beam search and scoring terms (LM + prior - edit cost) to keep top-N candidates.
-5. Train classification models (baseline and supervised contrastive variants).
-6. Run N-best inference with weighted aggregation and optional entropy-based dynamic fallback to the original sentence.
-7. Summarize F1 and Delta improvements in experiment outputs.
+- Python 3.10.
+- PyTorch, Transformers, Datasets, Accelerate, SentencePiece, and Evaluate.
+- Pandas, NumPy, SciPy, scikit-learn, Matplotlib, and Seaborn.
+- Jieba, PKUSeg, Pypinyin, and KenLM.
+- PyYAML, regex, fsspec, tqdm, and related dependencies listed in `model.yml`.
+- A shell environment for the experiment scripts.
+- A CUDA-capable GPU is recommended for transformer training and inference, but CPU execution is possible for small tests.
 
-## Configuration and Tuning
+`model.yml` is the authoritative dependency specification; no separate `requirements.txt` is currently provided.
 
-See `config/tunable_params_Version3.yaml` for:
-- recommended tunable training/data parameters,
-- N-best/normalization parameters (`m`, `beam_size`, `topn`, `alpha`, `beta`, `lamb`, `delta`, `tau`),
-- inference ablation settings (`top_k`, `alpha`, `fallback_orig`, thresholds),
-- example ablation combinations.
+## Methodology
 
-## Reproducibility Notes
+1. Start with clean Chinese sentiment data and inject character-level homophone substitutions using a fixed random seed.
+2. Segment noisy text and generate word-level and character-level correction candidates from the supplied homophone dictionaries.
+3. Score candidates with KenLM probabilities, edit costs, and candidate priors, then retain an N-best list using beam search.
+4. Train baseline or supervised-contrastive text classifiers on the selected data.
+5. Run the classifier over the original text and N-best candidates.
+6. Normalize candidate weights, aggregate the candidate predictions, and optionally interpolate with the original-text prediction.
+7. Use normalized Shannon entropy to control the fallback strength: low entropy favors the correction candidates, while high entropy favors the original sentence.
+8. Record accuracy, F1, precision, recall, confusion matrices, and experiment-specific comparison metrics.
 
-- Seed `42` is used by default in major scripts.
-- Experiment shells cache global test N-best generation to avoid recomputation.
-- Outputs are written under `outputs/` (for example `outputs/matrix_experiment/...`).
-- Resume/skip behavior is implemented by checking existing metric files (for example `metrics_e4.json`).
-- Results depend on local data/model paths and your environment setup.
+Default seeds are set to `42` in the main scripts. Experiment runners cache generated N-best files and skip existing metric files where supported, which makes repeated runs faster and resumable.
 
-## Dataset Information
+## Citations
 
-The original test dataset used in this repository is a Chinese text dataset, not an English text dataset. In the default setting, the text data are Chinese user-generated reviews or posts, for example Chinese Weibo sentiment data. All preprocessing, homophone noise injection, candidate generation, normalization, and evaluation are designed for Chinese text.
-
-The default label space is a three-class sentiment classification:
-
-- 0 = negative
-- 1 = neutral
-- 2 = positive
-
-The text column `review` means "user review", "comment", or "post content". It does not mean "censorship" or "examination" (shencha in pinyin). The label column `label` means the sentiment class. If the original data are binary (0/1), a separate neutral dataset can be merged and assigned label 1 (neutral) to form the three-class setting.
-
-For N-best files, `orig` is the original Chinese sentence, which may contain homophone noise (tongyinzi in pinyin). `cand_1 ... cand_k` are Chinese correction candidates. `w_1 ... w_k` are their weights or confidences. `score_1 ... score_k` are normalization or language-model scores. These fields are not English text fields. They should be interpreted as Chinese text and Chinese-oriented correction scores.
-
-`neg`, `neu`, and `pos` are abbreviations for negative, neutral, and positive. `Hanzi` in pinyin means Chinese characters. `Zhongwen` in pinyin means Chinese language or Chinese text.
-
-## Citation
-
-#### Dataset Citation
-
-##### 1. weibo_senti_100k (Primary Dataset)
-
-The primary dataset used in this repository is **weibo_senti_100k**, a publicly available Chinese sentiment analysis dataset derived from Sina Weibo. It contains over 100,000 manually annotated Weibo posts, with approximately 59,993 positive and 59,995 negative samples. The dataset covers diverse social media content, including daily user expressions, trending topic discussions, and short texts containing emoticons and internet slang.
-
-In this repository, the dataset is used as a Chinese text classification corpus. The text column `review` means “user review”, “comment”, or “post content”; it does not mean “censorship” or “examination” (`shencha` in pinyin). The label column `label` contains the sentiment class. For the three-class setting, a separate neutral dataset can be merged and assigned label `1` (neutral).
-
-**Source / Download Link:**
-
-- GitHub: https://github.com/SophonPlus/ChineseNlpCorpus
-- Dataset path in repository: `datasets/weibo_senti_100k`
-
-**Suggested Citation Format:**
+If you use the dataset, cite its original source and follow its licensing terms:
 
 ```bibtex
 @misc{weibo_senti_100k,
-  title        = {weibo\_senti\_100k: Chinese Sentiment Analysis Dataset},
-  howpublished = {\url{https://github.com/SophonPlus/ChineseNlpCorpus}},
-  note         = {Chinese sentiment analysis dataset from Sina Weibo}
+  title        = {weibo_senti_100k: Chinese Sentiment Analysis Dataset},
+  howpublished = {https://github.com/SophonPlus/ChineseNlpCorpus},
+  note         = {Chinese sentiment analysis dataset derived from Sina Weibo}
 }
 ```
 
-##### 2. Neutral Dataset (Auxiliary Dataset)
+If you use the pretrained encoder, also cite the corresponding model release, such as the `hfl/chinese-roberta-wwm-ext` model card. If this repository is used in a publication, cite the paper associated with this implementation:
 
-If a separate neutral dataset is used to extend the binary setting to three classes, its source, license, and citation should follow the original dataset provider. The neutral data are assigned label `1` (neutral) in this repository.
+> Entropy-driven dynamic gating with N-best candidate fusion for robust sentiment analysis of noisy user-generated content.
 
-## License
+## License & Contribution Guidelines
 
-No explicit repository license file was detected at the time of writing.  
-Please add a LICENSE file if you want to define redistribution and usage terms.
+No `LICENSE` file is currently included, so the repository does not yet declare an explicit redistribution license. Add a `LICENSE` file before distributing the code or derived artifacts under defined terms. Dataset and pretrained-model licenses remain the responsibility of their original providers.
 
-## Contributing
+To contribute:
 
-Practical contribution workflow:
-1. Fork the repository and create a feature branch.
-2. Keep changes minimal and focused.
-3. Run relevant checks/scripts locally.
-4. Open a pull request with clear description, data/path assumptions, and reproducibility notes.
-
-## Limitations and Practical Notes
-
-- Many scripts assume local/project-specific absolute or relative paths.
-- Large datasets, checkpoints, and language models are intentionally not committed here.
-- Do not commit sensitive data, credentials, or large binary artifacts to the repository.
+1. Fork the repository and create a focused feature branch.
+2. Keep changes reproducible and document new data paths, parameters, and assumptions.
+3. Run the relevant scripts or checks locally and avoid committing datasets, checkpoints, credentials, or other sensitive artifacts.
+4. Open a pull request with a concise description, validation details, and any changes to expected input/output formats.
