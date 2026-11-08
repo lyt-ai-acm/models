@@ -212,7 +212,6 @@ If you use the pretrained encoder, also cite the corresponding model release, su
 
 ## License & Contribution Guidelines
 
-No `LICENSE` file is currently included, so the repository does not yet declare an explicit redistribution license. Add a `LICENSE` file before distributing the code or derived artifacts under defined terms. Dataset and pretrained-model licenses remain the responsibility of their original providers.|
 The repository currently does not include a LICENSE file and therefore does not yet declare explicit redistribution terms. Before distributing code or derived artifacts, add a LICENSE file with the intended terms. Dataset and pretrained model licenses remain with their original providers.
 
 To contribute:
